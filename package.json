@@ -1,0 +1,68 @@
+{
+  "name": "vscode-mermaid-viewer",
+  "displayName": "Mermaid Viewer with Pan/Zoom",
+  "description": "View Mermaid diagrams in Markdown files with pan and zoom",
+  "version": "0.1.0",
+  "publisher": "sahokun",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sahokun/vscode-mermaid-viewer"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "keywords": [
+    "mermaid",
+    "diagram",
+    "markdown",
+    "preview",
+    "pan",
+    "zoom"
+  ],
+  "activationEvents": [
+    "onCommand:mermaid-viewer.open"
+  ],
+  "main": "./extension/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mermaid-viewer.open",
+        "title": "Open Advanced Mermaid Viewer",
+        "category": "Mermaid"
+      }
+    ],
+    "markdown.previewScripts": [
+      "./preview/mermaid-preview-bundle.js"
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceExtname == .md",
+          "command": "mermaid-viewer.open",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "when": "resourceExtname == .md",
+          "command": "mermaid-viewer.open",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "postinstall": "node scripts/copy-mermaid.js && node scripts/bundle-preview.js",
+    "bundle": "node scripts/bundle-preview.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "mermaid": "^11.0.0",
+    "@vscode/vsce": "^2.0.0"
+  },
+  "dependencies": {}
+}
