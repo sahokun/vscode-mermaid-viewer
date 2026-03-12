@@ -1,0 +1,13 @@
+# Node modules
+node_modules/
+
+# Build artifacts
+*.vsix
+.vscode-test/
+preview/mermaid-preview-bundle.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+.claude/settings.local.json

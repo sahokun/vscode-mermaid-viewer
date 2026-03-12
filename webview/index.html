@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--vscode-editor-background);
+            color: var(--vscode-editor-foreground);
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        #container {
+            width: 100%;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        #content {
+            padding: 20px;
+            padding-bottom: 80px; /* Space for zoom controls */
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .mermaid-wrapper {
+            margin: 20px 0;
+            background: var(--vscode-editor-background);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--vscode-panel-border);
+            cursor: grab;
+            overflow: hidden;
+            /* Ensure larger interactive area for pan/zoom */
+            min-width: 100%;
+            min-height: 500px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+        }
+
+        .mermaid-wrapper:active {
+            cursor: grabbing;
+        }
+
+        .mermaid-container {
+            display: inline-block;
+            transform-origin: 0 0;
+            min-width: 100%;
+        }
+
+        h1, h2, h3 {
+            margin: 20px 0 10px 0;
+            color: var(--vscode-editor-foreground);
+        }
+
+        p {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+
+        code {
+            background: var(--vscode-textCodeBlock-background);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+
+        pre {
+            background: var(--vscode-textCodeBlock-background);
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+
+        .error-message {
+            color: var(--vscode-errorForeground);
+            background: var(--vscode-inputValidation-errorBackground);
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid var(--vscode-errorForeground);
+        }
+
+        .zoom-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            background: var(--vscode-editor-background);
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--vscode-panel-border);
+            z-index: 1000;
+        }
+
+        .zoom-controls button {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .zoom-controls button:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+
+        .zoom-info {
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="content"></div>
+    </div>
+
+    <div class="zoom-controls">
+        <button id="zoom-out">-</button>
+        <div class="zoom-info" id="zoom-level">100%</div>
+        <button id="zoom-in">+</button>
+        <button id="zoom-reset">Reset</button>
+    </div>
+
+    <script>
+        const vscode = acquireVsCodeApi();
+        const markdownContent = "{{MARKDOWN_CONTENT}}";
+
+        // Load mermaid dynamically and initialize when ready
+        function loadMermaid() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = '{{MERMAID_JS_URI}}';
+                script.onload = () => {
+                    console.log('Mermaid script loaded successfully from:', script.src);
+                    // Initialize Mermaid
+                    mermaid.initialize({
+                        startOnLoad: false,
+                        theme: document.body.classList.contains('vscode-dark') ? 'dark' : 'default',
+                        securityLevel: 'loose',
+                        fontFamily: 'arial'
+                    });
+                    resolve();
+                };
+                script.onerror = (error) => {
+                    console.error('Failed to load Mermaid script from:', script.src, error);
+                    reject(new Error('Failed to load Mermaid library'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        // Parse and render content
+        async function renderContent(content) {
+            console.log('renderContent called with content length:', content ? content.length : 0);
+            const container = document.getElementById('content');
+            container.innerHTML = '';
+
+            try {
+                const { html, mermaidBlocks } = parseMarkdown(content);
+                console.log('Parsed markdown. Found', mermaidBlocks.length, 'mermaid blocks');
+
+                // Set the initial HTML with placeholders
+                container.innerHTML = html;
+
+                // Render each mermaid diagram and replace placeholders
+                for (let i = 0; i < mermaidBlocks.length; i++) {
+                    const mermaidCode = mermaidBlocks[i];
+                    console.log('Rendering mermaid block', i, ':', mermaidCode.substring(0, 50));
+
+                    // Find the placeholder in the DOM
+                    const placeholder = `__MERMAID_PLACEHOLDER_${i}__`;
+                    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+                    let node;
+                    let targetNode = null;
+
+                    while (node = walker.nextNode()) {
+                        if (node.textContent.includes(placeholder)) {
+                            targetNode = node;
+                            break;
+                        }
+                    }
+
+                    if (!targetNode) {
+                        console.warn('Placeholder not found for mermaid block', i);
+                        continue;
+                    }
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'mermaid-wrapper';
+                    wrapper.id = 'mermaid-wrapper-' + i;
+
+                    try {
+                        const { svg } = await mermaid.render('mermaid-diagram-' + i, mermaidCode);
+                        console.log('Mermaid render successful for block', i);
+
+                        const mermaidContainer = document.createElement('div');
+                        mermaidContainer.className = 'mermaid-container';
+                        mermaidContainer.innerHTML = svg;
+                        wrapper.appendChild(mermaidContainer);
+
+                        // Replace placeholder with diagram
+                        targetNode.parentNode.replaceChild(wrapper, targetNode);
+
+                        // Apply pan/zoom to this diagram
+                        initPanZoom(wrapper, mermaidContainer);
+                    } catch (error) {
+                        console.error('Mermaid rendering error for block', i, ':', error);
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'error-message';
+                        errorDiv.textContent = 'Mermaid rendering error: ' + error.message;
+                        wrapper.appendChild(errorDiv);
+                        targetNode.parentNode.replaceChild(wrapper, targetNode);
+                    }
+                }
+            } catch (error) {
+                console.error('Error in renderContent:', error);
+                container.innerHTML = '<div class="error-message">Error parsing markdown: ' + error.message + '</div>';
+                vscode.postMessage({ command: 'error', text: error.message });
+            }
+        }
+
+        function parseMarkdown(text) {
+            // Extract mermaid blocks with unique placeholders
+            const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
+            const mermaidBlocks = [];
+            let match;
+            let index = 0;
+
+            // Replace each mermaid block with a unique placeholder
+            let processedText = text.replace(mermaidRegex, (fullMatch, code) => {
+                mermaidBlocks.push(code.trim());
+                return `__MERMAID_PLACEHOLDER_${index++}__`;
+            });
+
+            // Basic markdown to HTML conversion
+            let html = processedText
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+
+            html = '<p>' + html + '</p>';
+            html = html.replace(/<p><\/p>/g, '');
+            html = html.replace(/<p><h/g, '<h');
+            html = html.replace(/<\/h([1-6])><\/p>/g, '</h$1>');
+
+            return { html, mermaidBlocks };
+        }
+
+        // Pan/Zoom implementation
+        function initPanZoom(wrapper, container) {
+            let scale = 1;
+            let translateX = 0;
+            let translateY = 0;
+            let isDragging = false;
+            let startX = 0;
+            let startY = 0;
+
+            function updateTransform() {
+                container.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+                document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+            }
+
+            // Mouse wheel zoom
+            wrapper.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const rect = wrapper.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newScale = Math.min(Math.max(0.1, scale * delta), 5);
+
+                // Zoom towards cursor position
+                translateX = x - (x - translateX) * (newScale / scale);
+                translateY = y - (y - translateY) * (newScale / scale);
+                scale = newScale;
+
+                updateTransform();
+            });
+
+            // Mouse drag pan
+            wrapper.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                startX = e.clientX - translateX;
+                startY = e.clientY - translateY;
+                wrapper.style.cursor = 'grabbing';
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                translateX = e.clientX - startX;
+                translateY = e.clientY - startY;
+                updateTransform();
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    wrapper.style.cursor = 'grab';
+                }
+            });
+
+            // Zoom controls
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                scale = Math.min(scale * 1.2, 5);
+                updateTransform();
+            });
+
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                scale = Math.max(scale * 0.8, 0.1);
+                updateTransform();
+            });
+
+            document.getElementById('zoom-reset').addEventListener('click', () => {
+                scale = 1;
+                translateX = 0;
+                translateY = 0;
+                updateTransform();
+            });
+        }
+
+        // Listen for updates from extension
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.command) {
+                case 'update':
+                    renderContent(message.content);
+                    break;
+            }
+        });
+
+        // Initialize: Load mermaid then render content
+        (async () => {
+            try {
+                await loadMermaid();
+                console.log('Mermaid loaded, rendering content...');
+                await renderContent(markdownContent);
+            } catch (error) {
+                console.error('Error during initialization:', error);
+                document.getElementById('content').innerHTML = '<div class="error-message">Failed to load Mermaid library from CDN. Please check your internet connection.</div>';
+            }
+        })();
+    </script>
+</body>
+</html>

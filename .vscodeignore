@@ -1,0 +1,18 @@
+# Development files
+.vscode/
+.gitignore
+.git/
+.github/
+node_modules/
+scripts/
+*.vsix
+
+# Source files (bundle is used instead)
+preview/mermaid-pan-zoom.js
+
+# Documentation (README is included)
+.claude/
+sample.md
+
+# Lock files
+package-lock.json
