@@ -71,3 +71,7 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Development Node.js
+
+Use Node.js 22.23.4 from `.nvmrc` (`nvm install && nvm use`). This version includes the CVE-2026-111497 Brotli fix. CI uses the same file and records the Node version and executable path. GitHub Actions use a separate runner-managed Node runtime; keep runners updated.
