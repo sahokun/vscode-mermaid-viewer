@@ -62,7 +62,7 @@
   },
   "devDependencies": {
     "mermaid": "^11.0.0",
-    "@vscode/vsce": "^2.0.0"
+    "@vscode/vsce": "^4.1.1"
   },
   "dependencies": {}
 }
