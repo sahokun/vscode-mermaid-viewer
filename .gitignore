@@ -11,3 +11,4 @@ preview/mermaid-preview-bundle.js
 Thumbs.db
 
 .claude/settings.local.json
+.env
